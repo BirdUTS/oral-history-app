@@ -4,6 +4,7 @@ import { useState, useRef, useCallback, useEffect } from "react";
 import Link from "next/link";
 import RecordButton from "@/components/RecordButton";
 import WaveformAnimation from "@/components/WaveformAnimation";
+import TranscriptReviewCard, { UncertainTerm } from "@/components/TranscriptReviewCard";
 import { supabase } from "@/lib/supabaseClient";
 
 interface Session {
@@ -34,6 +35,17 @@ export default function InterviewClient({ session }: InterviewClientProps) {
   const [isContinuation, setIsContinuation] = useState(false);
   const [error, setError] = useState<string>("");
   const [isInitializing, setIsInitializing] = useState(true);
+
+  // Transcript review state
+  const [uncertainTerms, setUncertainTerms] = useState<UncertainTerm[]>([]);
+  const pendingSegmentRef = useRef<{
+    audioUrl: string | null;
+    rawTranscript: string;
+    currentQ: string;
+    nextQuestion: string;
+    newSegmentNumber: number;
+    updatedHistory: HistoryMessage[];
+  } | null>(null);
 
   const [analyserNode, setAnalyserNode] = useState<AnalyserNode | null>(null);
 
@@ -152,12 +164,9 @@ export default function InterviewClient({ session }: InterviewClientProps) {
         const { error: uploadError } = await supabase.storage
           .from("recordings")
           .upload(fileName, audioBlob, { contentType: "audio/webm" });
-
-        // Store the storage path so the audio proxy can generate a fresh signed URL on demand.
-        // Storing a static public URL won't work for private buckets.
         const audioUrl: string | null = uploadError ? null : fileName;
 
-        // 2. Transcribe audio via MiniMax
+        // 2. Transcribe audio
         const transcribeFormData = new FormData();
         transcribeFormData.append("audio", audioBlob, "recording.webm");
         const transcribeRes = await fetch("/api/transcribe", {
@@ -168,63 +177,71 @@ export default function InterviewClient({ session }: InterviewClientProps) {
           const errData = await transcribeRes.json().catch(() => ({}));
           throw new Error(errData.error ?? `轉文字失敗 (${transcribeRes.status})`);
         }
-        const transcribeData = await transcribeRes.json();
-        const newTranscript: string = transcribeData.transcript ?? "";
+        const { transcript: rawTranscript = "" } = await transcribeRes.json();
 
-        setTranscript(newTranscript);
+        setTranscript(rawTranscript);
         setShowTranscript(true);
 
-        // 3. Build updated history
+        // 3. Build updated history with raw transcript
         const currentQ = currentQuestion;
         const updatedHistory: HistoryMessage[] = [
           ...history,
           { role: "assistant", content: currentQ },
-          { role: "user", content: newTranscript },
+          { role: "user", content: rawTranscript },
         ];
         setHistory(updatedHistory);
 
-        // 4. Get next AI question
-        const interviewRes = await fetch("/api/interview", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            history: updatedHistory,
-            subjectInfo: {
-              subject_name: session.subject_name,
-              subject_age: session.subject_age,
-              village: session.village,
-            },
+        // 4. Run interview AI + transcript evaluation IN PARALLEL
+        const [interviewRes, evalRes] = await Promise.all([
+          fetch("/api/interview", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              history: updatedHistory,
+              subjectInfo: {
+                subject_name: session.subject_name,
+                subject_age: session.subject_age,
+                village: session.village,
+              },
+            }),
           }),
-        });
+          fetch("/api/evaluate-transcript", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ transcript: rawTranscript }),
+          }),
+        ]);
+
         if (!interviewRes.ok) {
           const errData = await interviewRes.json().catch(() => ({}));
           throw new Error(errData.error ?? `AI 問題生成失敗 (${interviewRes.status})`);
         }
-        const interviewData = await interviewRes.json();
-        const nextQuestion: string = interviewData.question ?? "請繼續分享。";
+        const { question: nextQuestion = "請繼續分享。" } = await interviewRes.json();
 
-        // 5. Save segment to Supabase
+        // Evaluation is non-critical — never throw
+        const evalData = evalRes.ok ? await evalRes.json().catch(() => ({})) : {};
+        const terms: UncertainTerm[] = evalData.uncertainTerms ?? [];
+
         const newSegmentNumber = segmentCount + 1;
-        await fetch("/api/segments", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            session_id: session.id,
-            sequence_number: newSegmentNumber,
-            audio_url: audioUrl,
-            transcript: newTranscript,
-            ai_question: currentQ,
-          }),
-        });
 
-        setSegmentCount(newSegmentNumber);
+        // Stash everything needed for the save step
+        pendingSegmentRef.current = {
+          audioUrl,
+          rawTranscript,
+          currentQ,
+          nextQuestion,
+          newSegmentNumber,
+          updatedHistory,
+        };
 
-        // 6. Show next question after brief transcript display
-        setTimeout(() => {
-          setShowTranscript(false);
-          setCurrentQuestion(nextQuestion);
+        if (terms.length > 0) {
+          // Show review card — save will happen after user confirms
+          setUncertainTerms(terms);
           setRecordState("idle");
-        }, 2000);
+        } else {
+          // No uncertain terms — save immediately and move on
+          await commitSegment(rawTranscript, {});
+        }
       } catch (err) {
         console.error(err);
         const message = err instanceof Error ? err.message : "處理時出現問題";
@@ -235,6 +252,73 @@ export default function InterviewClient({ session }: InterviewClientProps) {
 
     mediaRecorder.stop();
   }, [currentQuestion, history, segmentCount, session]);
+
+  // Applies corrections to the raw transcript and saves the segment
+  const commitSegment = useCallback(
+    async (rawTranscript: string, corrections: Record<string, string>) => {
+      const pending = pendingSegmentRef.current;
+      if (!pending) return;
+
+      // Apply user corrections to the transcript text
+      let finalTranscript = rawTranscript;
+      for (const [original, corrected] of Object.entries(corrections)) {
+        finalTranscript = finalTranscript.split(original).join(corrected);
+      }
+
+      // Update displayed transcript if corrections were made
+      if (Object.keys(corrections).length > 0) {
+        setTranscript(finalTranscript);
+        // Also update history with corrected text
+        setHistory((prev) => {
+          const updated = [...prev];
+          // Last user message is the raw transcript — replace it
+          for (let i = updated.length - 1; i >= 0; i--) {
+            if (updated[i].role === "user") {
+              updated[i] = { role: "user", content: finalTranscript };
+              break;
+            }
+          }
+          return updated;
+        });
+      }
+
+      await fetch("/api/segments", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          session_id: session.id,
+          sequence_number: pending.newSegmentNumber,
+          audio_url: pending.audioUrl,
+          transcript: finalTranscript,
+          ai_question: pending.currentQ,
+        }),
+      });
+
+      setSegmentCount(pending.newSegmentNumber);
+      setUncertainTerms([]);
+      pendingSegmentRef.current = null;
+
+      setTimeout(() => {
+        setShowTranscript(false);
+        setCurrentQuestion(pending.nextQuestion);
+        setRecordState("idle");
+      }, 1200);
+    },
+    [session.id]
+  );
+
+  const handleReviewConfirm = useCallback(
+    (corrections: Record<string, string>) => {
+      const raw = pendingSegmentRef.current?.rawTranscript ?? transcript;
+      commitSegment(raw, corrections);
+    },
+    [commitSegment, transcript]
+  );
+
+  const handleReviewDismiss = useCallback(() => {
+    const raw = pendingSegmentRef.current?.rawTranscript ?? transcript;
+    commitSegment(raw, {});
+  }, [commitSegment, transcript]);
 
   return (
     <main className="flex flex-col min-h-screen">
@@ -282,11 +366,21 @@ export default function InterviewClient({ session }: InterviewClientProps) {
                 </p>
               </div>
 
-              {/* Transcript preview */}
+              {/* Transcript preview + optional review card */}
               {showTranscript && transcript && (
-                <div className="bg-stone-100 rounded-2xl px-5 py-4 transition-all duration-500">
-                  <p className="text-sm text-stone-500 mb-1">您說：</p>
-                  <p className="text-stone-700 leading-relaxed">{transcript}</p>
+                <div className="space-y-3 w-full">
+                  <div className="bg-stone-100 rounded-2xl px-5 py-4">
+                    <p className="text-sm text-stone-500 mb-1">您說：</p>
+                    <p className="text-stone-700 leading-relaxed">{transcript}</p>
+                  </div>
+
+                  {uncertainTerms.length > 0 && (
+                    <TranscriptReviewCard
+                      terms={uncertainTerms}
+                      onConfirm={handleReviewConfirm}
+                      onDismiss={handleReviewDismiss}
+                    />
+                  )}
                 </div>
               )}
             </div>
