@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import OpenAI from "openai";
+import OpenAI, { toFile } from "openai";
 
 export const maxDuration = 60;
 
@@ -14,8 +14,16 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "No audio file provided" }, { status: 400 });
     }
 
+    // Convert to ArrayBuffer first so the OpenAI SDK receives a properly
+    // typed file with an explicit filename and MIME type. Passing the raw
+    // Web API File object can cause format-detection failures in Node.js.
+    const arrayBuffer = await audioFile.arrayBuffer();
+    const file = await toFile(Buffer.from(arrayBuffer), "recording.webm", {
+      type: "audio/webm",
+    });
+
     const transcription = await openai.audio.transcriptions.create({
-      file: audioFile,
+      file,
       model: "whisper-1",
       language: "zh",
     });
