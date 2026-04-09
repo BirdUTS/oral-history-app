@@ -22,6 +22,26 @@ export async function POST(req: NextRequest) {
   return NextResponse.json({ id: data.id });
 }
 
+export async function PATCH(req: NextRequest) {
+  const { id, transcript, ai_question } = await req.json();
+
+  if (!id) {
+    return NextResponse.json({ error: "id is required" }, { status: 400 });
+  }
+
+  const updates: Record<string, string> = {};
+  if (transcript !== undefined) updates.transcript = transcript;
+  if (ai_question !== undefined) updates.ai_question = ai_question;
+
+  const { error } = await supabase.from("segments").update(updates).eq("id", id);
+
+  if (error) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+
+  return NextResponse.json({ ok: true });
+}
+
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const sessionId = searchParams.get("session_id");

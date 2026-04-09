@@ -68,9 +68,17 @@ export default async function SessionDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const [session, segments] = await Promise.all([getSession(id), getSegments(id)]);
+  const [session, allSegments] = await Promise.all([getSession(id), getSegments(id)]);
 
   if (!session) notFound();
+
+  // Separate the cached summary row from real conversation segments
+  const summarySegment = allSegments.find(
+    (s) => s.sequence_number === 0 && s.ai_question === "__SUMMARY__"
+  );
+  const segments = allSegments.filter(
+    (s) => !(s.sequence_number === 0 && s.ai_question === "__SUMMARY__")
+  );
 
   return (
     <main className="min-h-screen px-6 py-10">
@@ -103,10 +111,15 @@ export default async function SessionDetailPage({
           共 <span className="font-semibold text-amber-600">{segments.length}</span> 段對話記錄
         </div>
 
-        {/* Session summary — auto-generates, used as reference before continuing */}
+        {/* Session summary — loads from cache or generates once, then saves */}
         {segments.length > 0 && (
           <SessionSummary
-            segments={segments.map((s) => ({
+            sessionId={session.id}
+            cachedSegmentId={summarySegment?.id}
+            cachedSummaryJson={summarySegment?.transcript ?? undefined}
+            cachedSegmentCount={summarySegment ? parseInt(summarySegment.audio_url ?? "0", 10) : 0}
+            currentSegmentCount={segments.length}
+            conversationSegments={segments.map((s) => ({
               ai_question: s.ai_question,
               transcript: s.transcript,
               sequence_number: s.sequence_number,
