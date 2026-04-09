@@ -23,7 +23,7 @@ export async function POST(req: NextRequest) {
 }
 
 export async function PATCH(req: NextRequest) {
-  const { id, transcript, ai_question } = await req.json();
+  const { id, transcript, ai_question, audio_url } = await req.json();
 
   if (!id) {
     return NextResponse.json({ error: "id is required" }, { status: 400 });
@@ -32,6 +32,7 @@ export async function PATCH(req: NextRequest) {
   const updates: Record<string, string> = {};
   if (transcript !== undefined) updates.transcript = transcript;
   if (ai_question !== undefined) updates.ai_question = ai_question;
+  if (audio_url !== undefined) updates.audio_url = audio_url;
 
   const { error } = await supabase.from("segments").update(updates).eq("id", id);
 

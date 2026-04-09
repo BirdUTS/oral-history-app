@@ -70,12 +70,19 @@ export default function InterviewClient({ session }: InterviewClientProps) {
         const loadedHistory: HistoryMessage[] = [];
         let loadedCount = 0;
 
-        if (Array.isArray(existingSegments) && existingSegments.length > 0) {
-          for (const seg of existingSegments) {
+        // Filter out the cached summary row — it must not appear in the AI conversation history
+        const realSegments = Array.isArray(existingSegments)
+          ? existingSegments.filter(
+              (s) => !(s.sequence_number === 0 && s.ai_question === "__SUMMARY__")
+            )
+          : [];
+
+        if (realSegments.length > 0) {
+          for (const seg of realSegments) {
             if (seg.ai_question) loadedHistory.push({ role: "assistant", content: seg.ai_question });
             if (seg.transcript) loadedHistory.push({ role: "user", content: seg.transcript });
           }
-          loadedCount = existingSegments.length;
+          loadedCount = realSegments.length;
           setHistory(loadedHistory);
           setSegmentCount(loadedCount);
           setIsContinuation(true);
