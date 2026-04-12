@@ -1,7 +1,9 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  turbopack: {
+    root: "/home/user/oral-history-app",
+  },
 };
 
 export default nextConfig;
