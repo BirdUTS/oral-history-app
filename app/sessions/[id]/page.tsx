@@ -99,12 +99,20 @@ export default async function SessionDetailPage({
                 <span>{formatDate(session.created_at)}</span>
               </div>
             </div>
-            <Link
-              href={`/session/${session.id}`}
-              className="shrink-0 bg-amber-500 hover:bg-amber-600 text-white font-medium px-4 py-2 rounded-xl text-sm transition-colors"
-            >
-              繼續訪問
-            </Link>
+            <div className="flex flex-col sm:flex-row items-end sm:items-center gap-2 shrink-0">
+              <Link
+                href={`/sessions/${session.id}/memory`}
+                className="bg-white hover:bg-stone-50 text-stone-600 border border-stone-200 font-medium px-4 py-2 rounded-xl text-sm transition-colors"
+              >
+                記憶檔案
+              </Link>
+              <Link
+                href={`/session/${session.id}`}
+                className="bg-amber-500 hover:bg-amber-600 text-white font-medium px-4 py-2 rounded-xl text-sm transition-colors"
+              >
+                繼續訪問
+              </Link>
+            </div>
           </div>
         </div>
 

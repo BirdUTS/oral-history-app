@@ -36,15 +36,20 @@ interface Message {
 }
 
 export async function POST(req: NextRequest) {
-  const { history, subjectInfo, isContinuation } = await req.json() as {
+  const { history, subjectInfo, isContinuation, memoryContext } = await req.json() as {
     history: Message[];
     subjectInfo?: { subject_name?: string; village?: string; subject_age?: number };
     isContinuation?: boolean;
+    memoryContext?: string; // pre-built background summary from memory files
   };
 
   let systemWithContext = subjectInfo
     ? `${SYSTEM_PROMPT}\n\n受訪者資料：姓名：${subjectInfo.subject_name ?? "不詳"}，年齡：${subjectInfo.subject_age ?? "不詳"}，來自：${subjectInfo.village ?? "不詳"}`
     : SYSTEM_PROMPT;
+
+  if (memoryContext) {
+    systemWithContext += `\n\n【受訪者背景資料（來自記憶檔案）】\n${memoryContext}`;
+  }
 
   if (isContinuation && history.length > 0) {
     systemWithContext += `\n\n【重要提示】這是一次繼續訪問。上面的對話記錄是之前的訪問內容，請仔細閱讀並理解已討論過的話題，然後生成一條自然延續上次對話的問題。不要重複已問過的問題，要在已有內容的基礎上深入挖掘或開展新的話題。用一句簡短的話提示受訪者你記得上次的內容，然後問下一條問題。`;
