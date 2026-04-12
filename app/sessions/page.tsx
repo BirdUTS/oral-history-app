@@ -7,6 +7,7 @@ interface Session {
   subject_age: number | null;
   village: string | null;
   created_at: string;
+  is_private: boolean;
   segment_count: number;
 }
 
@@ -14,7 +15,7 @@ async function getSessions(): Promise<Session[]> {
   // Fetch sessions with segment count via a join
   const { data: sessions, error } = await supabase
     .from("sessions")
-    .select("id, subject_name, subject_age, village, created_at")
+    .select("id, subject_name, subject_age, village, created_at, is_private")
     .order("created_at", { ascending: false });
 
   if (error || !sessions) return [];
@@ -88,9 +89,16 @@ export default async function SessionsPage() {
               >
                 <div className="flex items-start justify-between gap-4">
                   <Link href={`/sessions/${session.id}`} className="space-y-1 flex-1 min-w-0 group">
-                    <h2 className="text-xl font-semibold text-stone-800 truncate group-hover:text-amber-600 transition-colors">
-                      {session.subject_name}
-                    </h2>
+                    <div className="flex items-center gap-2 min-w-0">
+                      <h2 className="text-xl font-semibold text-stone-800 truncate group-hover:text-amber-600 transition-colors">
+                        {session.subject_name}
+                      </h2>
+                      {session.is_private && (
+                        <span className="shrink-0 text-xs font-medium text-stone-500 bg-stone-100 border border-stone-200 px-2 py-0.5 rounded-full">
+                          私密
+                        </span>
+                      )}
+                    </div>
                     <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-stone-500">
                       {session.subject_age && (
                         <span>{session.subject_age} 歲</span>

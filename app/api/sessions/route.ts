@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { supabase } from "@/lib/supabaseClient";
 
 export async function POST(req: NextRequest) {
-  const { subject_name, subject_age, village } = await req.json();
+  const { subject_name, subject_age, village, is_private } = await req.json();
 
   if (!subject_name) {
     return NextResponse.json({ error: "subject_name is required" }, { status: 400 });
@@ -10,7 +10,12 @@ export async function POST(req: NextRequest) {
 
   const { data, error } = await supabase
     .from("sessions")
-    .insert({ subject_name, subject_age: subject_age || null, village: village || null })
+    .insert({
+      subject_name,
+      subject_age: subject_age || null,
+      village: village || null,
+      is_private: is_private === true,
+    })
     .select("id")
     .single();
 
@@ -24,7 +29,7 @@ export async function POST(req: NextRequest) {
 export async function GET() {
   const { data, error } = await supabase
     .from("sessions")
-    .select("id, subject_name, subject_age, village, created_at")
+    .select("id, subject_name, subject_age, village, created_at, is_private")
     .order("created_at", { ascending: false });
 
   if (error) {

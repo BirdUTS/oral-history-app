@@ -3,6 +3,7 @@ import { supabase } from "@/lib/supabaseClient";
 import { notFound } from "next/navigation";
 import ArticleGenerator from "@/components/ArticleGenerator";
 import SessionSummary from "@/components/SessionSummary";
+import PrivacyToggle from "@/components/PrivacyToggle";
 
 interface Segment {
   id: string;
@@ -19,12 +20,13 @@ interface Session {
   subject_age: number | null;
   village: string | null;
   created_at: string;
+  is_private: boolean;
 }
 
 async function getSession(id: string): Promise<Session | null> {
   const { data, error } = await supabase
     .from("sessions")
-    .select("id, subject_name, subject_age, village, created_at")
+    .select("id, subject_name, subject_age, village, created_at, is_private")
     .eq("id", id)
     .single();
 
@@ -110,6 +112,9 @@ export default async function SessionDetailPage({
         <div className="bg-amber-50 border border-amber-200 rounded-2xl px-5 py-4 text-sm text-stone-600">
           共 <span className="font-semibold text-amber-600">{segments.length}</span> 段對話記錄
         </div>
+
+        {/* Privacy toggle */}
+        <PrivacyToggle sessionId={session.id} initialIsPrivate={session.is_private ?? false} />
 
         {/* Session summary — loads from cache or generates once, then saves */}
         {segments.length > 0 && (

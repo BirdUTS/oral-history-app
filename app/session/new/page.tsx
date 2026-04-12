@@ -9,6 +9,7 @@ export default function NewSessionPage() {
   const [subjectName, setSubjectName] = useState("");
   const [subjectAge, setSubjectAge] = useState("");
   const [village, setVillage] = useState("");
+  const [isPrivate, setIsPrivate] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -29,6 +30,7 @@ export default function NewSessionPage() {
           subject_name: subjectName.trim(),
           subject_age: subjectAge ? parseInt(subjectAge, 10) : null,
           village: village.trim() || null,
+          is_private: isPrivate,
         }),
       });
 
@@ -103,6 +105,29 @@ export default function NewSessionPage() {
               className="w-full border border-stone-200 rounded-xl px-4 py-3 text-base text-stone-800 placeholder-stone-300 focus:outline-none focus:ring-2 focus:ring-amber-400 focus:border-transparent transition"
               disabled={loading}
             />
+          </div>
+
+          <div className="flex items-center justify-between rounded-xl border border-stone-200 px-4 py-3">
+            <div className="space-y-0.5">
+              <p className="text-stone-700 font-medium text-sm">私密訪問</p>
+              <p className="text-stone-400 text-xs">隱藏於訪問記錄列表，僅可透過直接連結查閱</p>
+            </div>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={isPrivate}
+              onClick={() => setIsPrivate((v) => !v)}
+              disabled={loading}
+              className={`relative shrink-0 w-11 h-6 rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 ${
+                isPrivate ? "bg-amber-500" : "bg-stone-200"
+              } disabled:opacity-50`}
+            >
+              <span
+                className={`block w-5 h-5 bg-white rounded-full shadow transition-transform ${
+                  isPrivate ? "translate-x-[22px]" : "translate-x-0.5"
+                }`}
+              />
+            </button>
           </div>
 
           {error && (
