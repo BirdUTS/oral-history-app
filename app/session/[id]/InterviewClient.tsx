@@ -88,13 +88,33 @@ export default function InterviewClient({ session }: InterviewClientProps) {
           setIsContinuation(true);
         }
 
-        // 3. Ask AI for next question (fresh start or continuation)
+        // 3. Fetch memory files so AI can reference them as background
+        let memoryContext: string | undefined;
+        try {
+          const memRes = await fetch(`/api/sessions/${session.id}/memory`);
+          if (memRes.ok) {
+            const memItems: Array<{ file_type: string; file_name: string }> = await memRes.json();
+            if (memItems.length > 0) {
+              const typeLabel = (t: string) =>
+                t === "image" ? "相片" : t === "audio" ? "聲音記錄" : "文件";
+              memoryContext =
+                `受訪者已上載 ${memItems.length} 份記憶檔案：` +
+                memItems.map((f) => `${typeLabel(f.file_type)}《${f.file_name}》`).join("、") +
+                "。請在合適時機自然地提及或引用這些背景資料。";
+            }
+          }
+        } catch {
+          // Memory context is non-critical — silently skip
+        }
+
+        // 4. Ask AI for next question (fresh start or continuation)
         const res = await fetch("/api/interview", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             history: loadedHistory,
             isContinuation: loadedCount > 0,
+            memoryContext,
             subjectInfo: {
               subject_name: session.subject_name,
               subject_age: session.subject_age,

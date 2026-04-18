@@ -24,6 +24,7 @@ export default function ArticleGenerator({ segments, subjectInfo }: ArticleGener
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string>("");
   const [isOpen, setIsOpen] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   async function handleGenerate() {
     setLoading(true);
@@ -52,7 +53,11 @@ export default function ArticleGenerator({ segments, subjectInfo }: ArticleGener
   }
 
   function handleCopy() {
-    if (article) navigator.clipboard.writeText(article);
+    if (!article) return;
+    navigator.clipboard.writeText(article).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
   }
 
   return (
@@ -85,9 +90,13 @@ export default function ArticleGenerator({ segments, subjectInfo }: ArticleGener
               {article && (
                 <button
                   onClick={handleCopy}
-                  className="text-xs text-stone-400 hover:text-stone-600 bg-stone-100 hover:bg-stone-200 px-3 py-1.5 rounded-lg transition-colors"
+                  className={`text-xs px-3 py-1.5 rounded-lg transition-colors ${
+                    copied
+                      ? "text-green-600 bg-green-50"
+                      : "text-stone-400 hover:text-stone-600 bg-stone-100 hover:bg-stone-200"
+                  }`}
                 >
-                  複製全文
+                  {copied ? "✓ 已複製" : "複製全文"}
                 </button>
               )}
               <button

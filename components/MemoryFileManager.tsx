@@ -140,9 +140,12 @@ export default function MemoryFileManager({ sessionId, initialItems }: Props) {
   async function handleFiles(files: FileList | null) {
     if (!files || files.length === 0) return;
     setUploadError(null);
-    setUploading(true);
 
-    for (const file of Array.from(files)) {
+    const fileList = Array.from(files);
+    for (let i = 0; i < fileList.length; i++) {
+      const file = fileList[i];
+      setUploading(true);
+
       const fd = new FormData();
       fd.append("file", file);
 
@@ -153,12 +156,12 @@ export default function MemoryFileManager({ sessionId, initialItems }: Props) {
         });
         const data = await res.json();
         if (!res.ok) {
-          setUploadError(data.error ?? "上載失敗");
+          setUploadError(`「${file.name}」上載失敗：${data.error ?? "未知錯誤"}`);
           break;
         }
         setItems((prev) => [...prev, data as MemoryItem]);
       } catch {
-        setUploadError("上載時發生錯誤，請重試");
+        setUploadError(`「${file.name}」上載時發生錯誤，請重試`);
         break;
       }
     }
@@ -167,7 +170,8 @@ export default function MemoryFileManager({ sessionId, initialItems }: Props) {
     if (inputRef.current) inputRef.current.value = "";
   }
 
-  function handleDelete(id: string) {
+  function handleDelete(id: string, fileName: string) {
+    if (!window.confirm(`確定刪除「${fileName}」？此操作無法復原。`)) return;
     startTransition(async () => {
       const res = await fetch(
         `/api/sessions/${sessionId}/memory/${id}`,
@@ -235,7 +239,7 @@ export default function MemoryFileManager({ sessionId, initialItems }: Props) {
           </h2>
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
             {images.map((item) => (
-              <ImageCard key={item.id} item={item} onDelete={() => handleDelete(item.id)} />
+              <ImageCard key={item.id} item={item} onDelete={() => handleDelete(item.id, item.file_name)} />
             ))}
           </div>
         </section>
@@ -250,7 +254,7 @@ export default function MemoryFileManager({ sessionId, initialItems }: Props) {
           </h2>
           <div className="space-y-2">
             {audios.map((item) => (
-              <AudioCard key={item.id} item={item} onDelete={() => handleDelete(item.id)} />
+              <AudioCard key={item.id} item={item} onDelete={() => handleDelete(item.id, item.file_name)} />
             ))}
           </div>
         </section>
@@ -265,7 +269,7 @@ export default function MemoryFileManager({ sessionId, initialItems }: Props) {
           </h2>
           <div className="space-y-2">
             {documents.map((item) => (
-              <DocumentCard key={item.id} item={item} onDelete={() => handleDelete(item.id)} />
+              <DocumentCard key={item.id} item={item} onDelete={() => handleDelete(item.id, item.file_name)} />
             ))}
           </div>
         </section>
